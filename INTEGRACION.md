@@ -1,8 +1,24 @@
 # Integracion Doc ROI Analytics
 
-## Publicacion
+## URL activa
 
-Conectar este repositorio a Vercel y desplegarlo como aplicacion independiente, por ejemplo `docroi-analytics.vercel.app`.
+Dashboard y API central:
+
+```text
+https://bsc-doc-roi-61qn.vercel.app/
+```
+
+Endpoint de eventos:
+
+```text
+https://bsc-doc-roi-61qn.vercel.app/api/collect
+```
+
+Endpoint de leads:
+
+```text
+https://bsc-doc-roi-61qn.vercel.app/api/lead
+```
 
 ## Variables Vercel
 
@@ -17,51 +33,47 @@ Sin webhook, la API acepta datos pero no los persiste. Para produccion, conectar
 
 ## Botiquin
 
-Insertar antes de `</body>`:
+Snippet esperado antes de `</body>`:
 
 ```html
 <script>
   window.DocROIAnalytics = {
     sourceSite: "Botiquin",
-    endpoint: "https://TU-DOMINIO-ANALYTICS.vercel.app/api/collect"
+    endpoint: "https://bsc-doc-roi-61qn.vercel.app/api/collect"
   };
 </script>
-<script src="https://TU-DOMINIO-ANALYTICS.vercel.app/tracker.js" defer></script>
+<script src="./docroi-botiquin-analytics.js" defer></script>
+<script src="https://bsc-doc-roi-61qn.vercel.app/tracker.js" defer></script>
 ```
 
-Etiquetar enlaces clave:
-
-```html
-<a href="https://doc-roi-executive.vercel.app/" data-analytics-link-id="LNK_EXECUTIVE_001" data-analytics-keyword="Executive" data-analytics-area="conversion">Abrir Doc ROI Executive</a>
-```
-
-Keywords iniciales: Pildora, Vitamina, Medicina, Ecuacion KAI, Botiquin, Diagnostico, Executive, Formacion, Incompany.
+El repo del Botiquin ya incluye un workflow para inyectarlo automaticamente.
 
 ## Executive
 
-Insertar el mismo tracker cambiando `sourceSite` a `Executive`.
+Snippet esperado antes de `</body>`:
 
-Enviar formularios de lead por POST a:
-
-```text
-https://TU-DOMINIO-ANALYTICS.vercel.app/api/lead
+```html
+<script>
+  window.DocROIAnalyticsBaseUrl = "https://bsc-doc-roi-61qn.vercel.app";
+  window.DocROIAnalytics = {
+    sourceSite: "Executive",
+    endpoint: "https://bsc-doc-roi-61qn.vercel.app/api/collect"
+  };
+</script>
+<script src="https://bsc-doc-roi-61qn.vercel.app/tracker.js" defer></script>
+<script src="./docroi-executive-analytics.js" defer></script>
 ```
 
-Payload recomendado:
+El repo de Executive ya incluye un workflow para inyectarlo automaticamente y enviar formularios a `/api/lead`.
 
-```json
-{
-  "source_site": "Executive",
-  "business_model_id": "BM_INCOMPANY",
-  "stage_id": "COLD",
-  "urgency_id": "HIGH",
-  "contact_name": "Nombre",
-  "company": "Empresa",
-  "email": "email@dominio.com",
-  "phone": "",
-  "role": "Director de formacion",
-  "need_summary": "Necesita diagnostico IA",
-  "next_action": "Responder y cualificar",
-  "consent": "Si"
-}
-```
+## Keywords iniciales
+
+- Pildora
+- Vitamina
+- Medicina
+- Ecuacion KAI
+- Botiquin
+- Diagnostico
+- Executive
+- Formacion
+- Incompany

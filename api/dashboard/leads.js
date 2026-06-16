@@ -1,0 +1,4 @@
+const { listSubmissions } = require("../_lib/storage.js");
+const { leadsTable } = require("../_lib/metrics.js");
+function today(){return new Date().toISOString().slice(0,10)}
+module.exports = async function handler(req,res){try{const dateFrom=req.query.date_from||process.env.CAMPAIGN_START_DATE||"2026-06-16";const dateTo=req.query.date_to||today();let rows=leadsTable(await listSubmissions(dateFrom,dateTo));if(req.query.form_type) rows=rows.filter(r=>r.form_type===req.query.form_type);if(req.query.urgent) rows=rows.filter(r=>String(r.urgent).toLowerCase().includes(String(req.query.urgent).toLowerCase()));if(req.query.q){const q=String(req.query.q).toLowerCase();rows=rows.filter(r=>JSON.stringify(r).toLowerCase().includes(q));}res.status(200).json({ok:true,date_from:dateFrom,date_to:dateTo,rows})}catch(e){res.status(500).json({ok:false,error:"leads_failed"})}};

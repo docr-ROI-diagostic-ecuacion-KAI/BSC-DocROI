@@ -1,0 +1,7 @@
+{
+  "app": "Doc ROI Analytics",
+  "version": "2026-06-16-stable-domain-reset",
+  "analytics_domain": "https://bsc-doc-roi.vercel.app",
+  "campaign_start_date": "2026-06-16",
+  "note": "If this file is not visible on the Vercel URL, the URL is an old deployment or the project has not redeployed."
+}

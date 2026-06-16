@@ -2,6 +2,7 @@ const { appendEvent, appendSubmission, dateFromIso } = require("./_lib/storage.j
 
 const allowedOrigins = [
   "https://doc-roi-executive.vercel.app",
+  "https://bsc-doc-roi.vercel.app",
   "https://bsc-doc-roi-61qn.vercel.app"
 ];
 
@@ -12,31 +13,10 @@ function cors(req, res) {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization,X-DocROI-Tracking-Secret");
 }
 
-function uid(prefix) {
-  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
-}
-
-function asBool(value) {
-  return value === true || value === "true" || value === "on" || value === "Si" || value === "sí";
-}
-
-function score(lead) {
-  let total = 0;
-  if (asBool(lead.urgent) || lead.urgency_id === "HIGH" || lead.urgency_id === "CRITICAL") total += 30;
-  if (lead.botiquin_to_executive || lead.previous_botiquin_browser_match) total += 20;
-  if (lead.institucion_empresa || lead.company || lead.institution_or_company || lead.organization) total += 15;
-  if (lead.demand_summary || lead.need_summary || lead.necesidad_principal || lead.disciplina_asignatura_modulo || lead.tipo_apoyo) total += 15;
-  if (lead.calendario_deseado || lead.expected_date || lead.fecha_aproximada_urgencia) total += 10;
-  if ((lead.form_type === "in_company" || lead.business_model_id === "BM_INCOMPANY") && Number(lead.numero_aproximado_personas || lead.approx_people_to_train || 0) > 10) total += 10;
-  if (lead.modalidad || lead.preferred_modality || lead.idioma || lead.language) total += 5;
-  return Math.min(total, 100);
-}
-
-function priority(scoreValue) {
-  if (scoreValue >= 80) return "alta";
-  if (scoreValue >= 50) return "media";
-  return "exploratoria";
-}
+function uid(prefix) { return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`; }
+function asBool(value) { return value === true || value === "true" || value === "on" || value === "Si" || value === "sí"; }
+function score(lead) { let total = 0; if (asBool(lead.urgent) || lead.urgency_id === "HIGH" || lead.urgency_id === "CRITICAL") total += 30; if (lead.botiquin_to_executive || lead.previous_botiquin_browser_match) total += 20; if (lead.institucion_empresa || lead.company || lead.institution_or_company || lead.organization) total += 15; if (lead.demand_summary || lead.need_summary || lead.necesidad_principal || lead.disciplina_asignatura_modulo || lead.tipo_apoyo) total += 15; if (lead.calendario_deseado || lead.expected_date || lead.fecha_aproximada_urgencia) total += 10; if ((lead.form_type === "in_company" || lead.business_model_id === "BM_INCOMPANY") && Number(lead.numero_aproximado_personas || lead.approx_people_to_train || 0) > 10) total += 10; if (lead.modalidad || lead.preferred_modality || lead.idioma || lead.language) total += 5; return Math.min(total, 100); }
+function priority(scoreValue) { if (scoreValue >= 80) return "alta"; if (scoreValue >= 50) return "media"; return "exploratoria"; }
 
 function sanitize(input) {
   const lead = { ...input };
@@ -58,6 +38,18 @@ function sanitize(input) {
   return lead;
 }
 
+async function forwardToExcelWebhook(submission) {
+  const url = process.env.DOCROI_CRM_WEBHOOK_URL || process.env.DOCROI_ANALYTICS_WEBHOOK_URL;
+  if (!url) return { ok: true, mode: "no_excel_webhook" };
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ type: "crm_lead", lead: submission })
+  });
+  if (!response.ok) throw new Error(`Excel webhook failed ${response.status}`);
+  return { ok: true, mode: "forwarded_to_excel" };
+}
+
 module.exports = async function handler(req, res) {
   cors(req, res);
   if (req.method === "OPTIONS") return res.status(204).end();
@@ -67,28 +59,12 @@ module.exports = async function handler(req, res) {
     if (!submission.browser_id || !submission.session_id || !submission.form_type) {
       return res.status(400).json({ ok: false, error: "invalid_submission" });
     }
-    const stored = await appendSubmission(submission);
-    await appendEvent({
-      event_id: `evt_${submission.submission_id}`,
-      timestamp: submission.timestamp,
-      event_ts: submission.timestamp,
-      event_date: submission.event_date,
-      app_name: "executive",
-      source_app: "executive",
-      event_type: "form_submit_success",
-      browser_id: submission.browser_id,
-      session_id: submission.session_id,
-      visit_id: submission.visit_id,
-      form_id: submission.form_id || submission.form_type,
-      form_type: submission.form_type,
-      keyword: "Executive",
-      keyword_id: "KW_EXECUTIVE",
-      page_url: submission.page_url || submission.landing_page || "",
-      page_path: submission.current_page_path || "",
-      lead_score: submission.lead_score
-    });
-    res.status(202).json({ ok: true, ...stored, submission_id: submission.submission_id, lead_score: submission.lead_score });
+    let storageResult = { ok: true, mode: "accepted" };
+    try { storageResult = await appendSubmission(submission); } catch (error) { storageResult = { ok: false, mode: "storage_failed" }; }
+    await appendEvent({ event_id: `evt_${submission.submission_id}`, timestamp: submission.timestamp, event_ts: submission.timestamp, event_date: submission.event_date, app_name: "executive", source_app: "executive", event_type: "form_submit_success", browser_id: submission.browser_id, session_id: submission.session_id, visit_id: submission.visit_id, form_id: submission.form_id || submission.form_type, form_type: submission.form_type, keyword: "Executive", keyword_id: "KW_EXECUTIVE", page_url: submission.page_url || submission.landing_page || "", page_path: submission.current_page_path || "", lead_score: submission.lead_score }).catch(() => null);
+    const excelResult = await forwardToExcelWebhook(submission);
+    res.status(202).json({ ok: true, storage: storageResult, excel: excelResult, submission_id: submission.submission_id, lead_score: submission.lead_score });
   } catch (error) {
-    res.status(500).json({ ok: false, error: "form_submit_failed" });
+    res.status(500).json({ ok: false, error: "form_submit_failed", detail: String(error && error.message || error) });
   }
 };

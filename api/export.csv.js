@@ -1,0 +1,6 @@
+const { listEvents, listSubmissions } = require("./_lib/storage.js");
+const { keywordRows, cohorts, leadsTable } = require("./_lib/metrics.js");
+function today(){return new Date().toISOString().slice(0,10)}
+function esc(value){const s=String(value??"");return /[",\n]/.test(s)?`"${s.replace(/"/g,'""')}"`:s}
+function csv(rows){if(!rows.length)return "empty\n";const headers=Object.keys(rows[0]);return [headers.join(","),...rows.map(r=>headers.map(h=>esc(typeof r[h]==="object"?JSON.stringify(r[h]):r[h])).join(","))].join("\n")+"\n"}
+module.exports = async function handler(req,res){try{const dateFrom=req.query.date_from||process.env.CAMPAIGN_START_DATE||"2026-06-16";const dateTo=req.query.date_to||today();const type=req.query.type||"events";const events=await listEvents(dateFrom,dateTo);const submissions=await listSubmissions(dateFrom,dateTo);let rows=events;if(type==="executive_leads")rows=leadsTable(submissions);if(type==="keyword_cohorts")rows=cohorts(events,submissions);if(type==="botiquin_summary")rows=keywordRows(events,submissions);if(type==="submissions")rows=submissions;res.setHeader("Content-Type","text/csv; charset=utf-8");res.setHeader("Content-Disposition",`attachment; filename=docroi-${type}-${dateFrom}-${dateTo}.csv`);res.status(200).send(csv(rows));}catch(e){res.status(500).send("error\nexport_failed\n")}};

@@ -8,6 +8,25 @@ function todayIso() {
   return new Date().toISOString();
 }
 
+function excelReady() {
+  return Boolean(process.env.DOCROI_ANALYTICS_WEBHOOK_URL || process.env.DOCROI_CRM_WEBHOOK_URL);
+}
+
+async function forwardToExcel(type, payload) {
+  const url = type === "crm_lead"
+    ? (process.env.DOCROI_CRM_WEBHOOK_URL || process.env.DOCROI_ANALYTICS_WEBHOOK_URL)
+    : process.env.DOCROI_ANALYTICS_WEBHOOK_URL;
+  if (!url) return { ok: true, mode: "no_excel_webhook" };
+  const body = type === "crm_lead" ? { type, lead: payload } : { type, event: payload };
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!response.ok) throw new Error(`Excel webhook failed ${response.status}`);
+  return { ok: true, mode: "forwarded_to_excel" };
+}
+
 module.exports = async function handler(req, res) {
   try {
     const now = todayIso();
@@ -27,7 +46,7 @@ module.exports = async function handler(req, res) {
       page_url: "https://el-botiquin-del-doc-roi.vercel.app/?utm_source=simulacion&utm_medium=test&utm_campaign=lanzamiento_docroi",
       page_path: "/",
       page_title: "Mi Botiquin | Doc ROI",
-      referrer: "https://bsc-doc-roi-61qn.vercel.app/api/simulate-visit",
+      referrer: "https://bsc-doc-roi.vercel.app/api/simulate-visit",
       utm_source: "simulacion",
       utm_medium: "test",
       utm_campaign: "lanzamiento_docroi",
@@ -48,7 +67,9 @@ module.exports = async function handler(req, res) {
 
     const results = [];
     for (const event of events) {
-      results.push(await appendEvent(event));
+      const storage = await appendEvent(event);
+      const excel = await forwardToExcel("analytics_event", event);
+      results.push({ storage, excel });
     }
 
     if (req.query.lead === "1") {
@@ -75,13 +96,17 @@ module.exports = async function handler(req, res) {
         utm_campaign: "lanzamiento_docroi",
         previous_keywords: ["Pildora", "Executive"]
       };
-      results.push(await appendSubmission(submission));
+      const storage = await appendSubmission(submission);
+      const excel = await forwardToExcel("crm_lead", submission);
+      results.push({ storage, excel });
     }
 
     res.status(200).json({
       ok: true,
+      capture_ready: hasStorage() || excelReady(),
       storage_ready: hasStorage(),
-      message: hasStorage() ? "Visita simulada guardada. Pulsa Actualizar en el dashboard." : "Storage no configurado: la simulacion se acepta pero no se guarda.",
+      excel_webhook_ready: excelReady(),
+      message: hasStorage() || excelReady() ? "Visita simulada enviada. Revisa Excel o el dashboard configurado." : "No hay storage ni webhook Excel: la simulacion se acepta pero no se guarda.",
       browser_id: browserId,
       session_id: sessionId,
       events_created: events.length,

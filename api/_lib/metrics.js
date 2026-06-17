@@ -30,6 +30,15 @@ function isImpression(event) {
   return ["content_impression", "section_view", "form_view"].includes(event.event_type);
 }
 
+function captureReady() {
+  return Boolean(
+    process.env.GITHUB_TOKEN ||
+    (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) ||
+    process.env.DOCROI_ANALYTICS_WEBHOOK_URL ||
+    process.env.DOCROI_CRM_WEBHOOK_URL
+  );
+}
+
 function summarize(events, submissions) {
   const botiquin = events.filter(isBotiquin);
   const executive = events.filter(isExecutive);
@@ -57,7 +66,9 @@ function summarize(events, submissions) {
     botiquin_to_executive: botToExecutive,
     botiquin_to_executive_rate: pct(botToExecutive, botBrowsers.size),
     total_events: events.length,
-    storage_ready: process.env.GITHUB_TOKEN ? true : false
+    storage_ready: captureReady(),
+    capture_ready: captureReady(),
+    excel_webhook_ready: Boolean(process.env.DOCROI_ANALYTICS_WEBHOOK_URL || process.env.DOCROI_CRM_WEBHOOK_URL)
   };
 }
 
